@@ -1,0 +1,13 @@
+.git
+.gitignore
+.dockerignore
+docker-compose.yaml
+README.md
+documentacion_tecnica.md
+documentacion_tecnica.txt
+
+# Directorios pesados o secretos
+.venv
+.env
+__pycache__
+scripts/test_pagination.py

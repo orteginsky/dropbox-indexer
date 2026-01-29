@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  # 1. Base de Datos (Configurada con TUS datos)
+  db:
+    image: postgres:15
+    container_name: dropbox_postgres
+    ports:
+      - "5433:5432"
+    environment:
+      # Estos valores crean el usuario y la DB al iniciar el contenedor
+      POSTGRES_USER: dropbox_user      # <--- Debe coincidir con tu URL
+      POSTGRES_PASSWORD: ortega        # <--- Debe coincidir con tu URL
+      POSTGRES_DB: dropbox_index       # <--- Debe coincidir con tu URL
+    volumes:
+      # Opcional pero recomendado: Esto guarda los datos en tu disco duro
+      # para no perderlos si apagas el contenedor.
+      - postgres_data:/var/lib/postgresql/data
+
+  # 2. Emulador de Pub/Sub
+  pubsub:
+    image: gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators
+    container_name: dropbox_pubsub
+    command: gcloud beta emulators pubsub start --host-port=0.0.0.0:8085
+    ports:
+      - "8085:8085"
+
+volumes:
+  postgres_data:

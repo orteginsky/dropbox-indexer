@@ -44,7 +44,8 @@ class DropboxItem(Base):
     content_hash = Column(String(128), nullable=True)
     client_modified = Column(DateTime, nullable=True)
     indexed_at = Column(DateTime, default=datetime.utcnow)
-
+    web_url = Column(Text, nullable=True)
+    
     __table_args__ = (
         Index('idx_parent_path', 'parent_path_lower'),
         Index('idx_type', 'type'),

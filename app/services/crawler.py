@@ -2,9 +2,11 @@ import logging
 from datetime import datetime
 from typing import Tuple, List
 from pathlib import PurePosixPath
+from urllib.parse import quote
 
 from dropbox import Dropbox
 from dropbox.files import FileMetadata, FolderMetadata
+from dropbox.common import PathRoot
 
 from app.services.auth_service import auth_service
 from app.services.pubsub_mgr import pubsub_mgr
@@ -21,23 +23,57 @@ def get_parent_path(path: str) -> str:
     return parent if parent != "." else ""
 
 
+def generate_web_url(path_display: str) -> str:
+    """
+    Genera la URL web de Dropbox sin llamar a la API.
+    """
+    if not path_display:
+        return ""
+    encoded_path = quote(path_display)
+    return f"https://www.dropbox.com/home{encoded_path}"
+
+
+def configure_dropbox_client(dbx: Dropbox) -> Dropbox:
+    """
+    Detecta si la cuenta pertenece a un equipo y configura el Root Namespace.
+    Esto permite ver carpetas compartidas y de equipo que de otra forma estarían ocultas.
+    """
+    try:
+        # Consultamos la cuenta actual
+        account = dbx.users_get_current_account()
+        
+        # Verificamos si tiene un Root Namespace (Team)
+        if account.root_info and hasattr(account.root_info, 'root_namespace_id'):
+            root_ns_id = account.root_info.root_namespace_id
+            logger.info(f"🏢 Configurando Team Namespace: {root_ns_id}")
+            
+            # Devolvemos el cliente configurado para ver la raíz del equipo
+            return dbx.with_path_root(PathRoot.namespace_id(root_ns_id))
+            
+    except Exception as e:
+        logger.warning(f"⚠️ No se pudo configurar el Team Namespace (se usará vista personal): {e}")
+    
+    return dbx
+
+
 def classify_entries(entries: list) -> Tuple[List[dict], List[dict]]:
     """
     Classify Dropbox entries into files and folders.
-
-    Returns:
-        Tuple of (files_list, folders_list) as dictionaries ready for DB
     """
     files = []
     folders = []
 
     for entry in entries:
+        # Generamos la URL web
+        web_url = generate_web_url(entry.path_display)
+
         base_item = {
             "id": entry.id,
             "name": entry.name,
             "path_display": entry.path_display,
             "path_lower": entry.path_lower,
             "parent_path_lower": get_parent_path(entry.path_lower),
+            "web_url": web_url,  # Incluimos la URL
             "indexed_at": datetime.utcnow()
         }
 
@@ -64,23 +100,18 @@ def classify_entries(entries: list) -> Tuple[List[dict], List[dict]]:
 async def process_folder_task(path: str) -> dict:
     """
     Main worker logic: Process a single folder task.
-
-    1. Get fresh token from auth microservice
-    2. List folder contents from Dropbox API
-    3. Bulk UPSERT files and folders to database
-    4. Publish subfolder tasks to Pub/Sub for fan-out
-
-    Args:
-        path: Dropbox folder path to process (e.g., "/" or "/Documents")
-
-    Returns:
-        Dictionary with processing statistics
     """
     logger.info(f"Starting to process folder: {path}")
 
     # 1. Get fresh Dropbox token
     token = await auth_service.get_valid_token()
+    
+    # Inicializamos cliente básico
     dbx = Dropbox(token)
+    
+    # --- CAMBIO CRÍTICO: Configurar el Namespace de Equipo ---
+    dbx = configure_dropbox_client(dbx)
+    # ---------------------------------------------------------
 
     # 2. List folder contents with pagination
     all_entries = []
@@ -88,14 +119,20 @@ async def process_folder_task(path: str) -> dict:
     # Handle root path (Dropbox API uses empty string for root)
     list_path = "" if path == "/" else path
 
-    result = dbx.files_list_folder(list_path)
-    all_entries.extend(result.entries)
-
-    # Handle pagination
-    while result.has_more:
-        result = dbx.files_list_folder_continue(result.cursor)
+    try:
+        result = dbx.files_list_folder(list_path)
         all_entries.extend(result.entries)
-        logger.debug(f"Fetched {len(all_entries)} entries so far for {path}")
+
+        # Handle pagination
+        while result.has_more:
+            result = dbx.files_list_folder_continue(result.cursor)
+            all_entries.extend(result.entries)
+            logger.debug(f"Fetched {len(all_entries)} entries so far for {path}")
+            
+    except Exception as e:
+        logger.error(f"Error listing folder {path}: {e}")
+        # Relanzamos para que Pub/Sub reintente si es un error temporal
+        raise e
 
     # 3. Classify and prepare data
     files_buffer, folders_buffer = classify_entries(all_entries)

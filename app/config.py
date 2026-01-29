@@ -1,3 +1,4 @@
+from typing import Optional
 from pydantic_settings import BaseSettings
 from functools import lru_cache
 
@@ -19,6 +20,11 @@ class Settings(BaseSettings):
 
     # Application
     log_level: str = "INFO"
+
+    #pruebas en local
+    pubsub_emulator_host: Optional[str] = None
+    pubsub_project_id: Optional[str] = None
+    pubsub_no_credentials: Optional[str] = None
 
     class Config:
         env_file = ".env"

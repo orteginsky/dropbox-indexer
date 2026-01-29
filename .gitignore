@@ -51,3 +51,22 @@ logs/
 # OS
 .DS_Store
 Thumbs.db
+
+.env
+.env.*
+!.env.example
+
+# Entorno Virtual de Python (Es gigante y específico de tu máquina)
+.venv/
+venv/
+
+# Archivos compilados de Python (Basura)
+__pycache__/
+*.pyc
+
+# IDEs (Configuraciones de tu editor de código)
+.vscode/
+.idea/
+
+# Sistema Operativo
+.DS_Store
