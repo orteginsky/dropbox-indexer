@@ -1,37 +1,27 @@
+# app/config.py
 from typing import Optional
 from pydantic_settings import BaseSettings
 from functools import lru_cache
 
-
 class Settings(BaseSettings):
     """Application configuration loaded from environment variables."""
 
-    # Token Service (AccessTokenDropbox)
+    # Token Service
     token_service_url: str = "https://accesstokendropbox-223080314602.us-central1.run.app"
     api_secret_key: str = ""
-
-    # GCP Configuration
-    gcp_project_id: str = "nexus-legal-ops"
-    pubsub_topic_name: str = "dropbox-crawl-tasks"
-    gcp_region: str = "us-central1"
-
     # Database
-    database_url: str = "postgresql://user:pass@localhost:5432/dropbox_index"
+    database_url: str = "postgresql+asyncpg://user:pass@localhost:5432/dropbox_index"
+
+    # Redis
+    redis_url: str = "redis://localhost:6379/0"
 
     # Application
     log_level: str = "INFO"
-
-    #pruebas en local
-    pubsub_emulator_host: Optional[str] = None
-    pubsub_project_id: Optional[str] = None
-    pubsub_no_credentials: Optional[str] = None
 
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
 
-
 @lru_cache()
 def get_settings() -> Settings:
-    """Cached settings instance."""
     return Settings()

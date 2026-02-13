@@ -1,13 +1,36 @@
+# --- Directorios de sistema y control de versiones ---
 .git
 .gitignore
 .dockerignore
-docker-compose.yaml
-README.md
+.idea
+.vscode
+__pycache__
+*/__pycache__
+*.pyc
+*.pyo
+*.pyd
+
+# --- Archivos de configuración de entorno y secretos ---
+.env
+.env.*
+*.env
+
+# --- Documentación y archivos informativos (No necesarios en producción) ---
+*.md
+*.txt
 documentacion_tecnica.md
 documentacion_tecnica.txt
+pasos.md
 
-# Directorios pesados o secretos
-.venv
-.env
-__pycache__
-scripts/test_pagination.py
+# --- Archivos de Base de Datos y Backups (¡CRÍTICO!) ---
+# Ignoramos los dumps para no inflar la imagen de Docker.
+# Estos se deben montar como volúmenes en el docker-compose, no copiarse dentro.
+*.sql
+*.dump
+backup_dropbox.sql
+entregable_IT.sql
+
+# --- Archivos de infraestructura (No se necesitan DENTRO del contenedor) ---
+docker-compose.yaml
+service.yaml
+Dockerfile

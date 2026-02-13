@@ -1,81 +1,48 @@
+# app/services/pubsub_mgr.py
 import json
 import logging
-
-from google.cloud import pubsub_v1
-
 from app.config import get_settings
+from app.database import save_pending_request
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
-
 class PubSubManager:
-    """Wrapper for Google Cloud Pub/Sub operations."""
+    """Wrapper modificado para MIGRACIÓN: Guarda en SQL en lugar de Pub/Sub."""
 
     def __init__(self):
-        self.project_id = settings.gcp_project_id
-        self.topic_name = settings.pubsub_topic_name
-        self._publisher = None
+        # 🗑️ ELIMINAMOS las referencias a gcp_project_id y pubsub_topic_name
+        # porque ya no existen en config.py ni las usamos aquí.
+        pass
 
-    @property
-    def publisher(self) -> pubsub_v1.PublisherClient:
-        """Lazy initialization of publisher client."""
-        if self._publisher is None:
-            self._publisher = pubsub_v1.PublisherClient()
-        return self._publisher
-
-    @property
-    def topic_path(self) -> str:
-        """Full topic path."""
-        return self.publisher.topic_path(self.project_id, self.topic_name)
-
-    def publish_message(self, data: dict) -> str:
+    async def publish_folder_task(self, path: str):
         """
-        Publish a message to the Pub/Sub topic.
-
-        Args:
-            data: Dictionary with message payload (e.g., {"path": "/folder"})
-
-        Returns:
-            Message ID from Pub/Sub
+        MODIFICADO PARA MIGRACIÓN:
+        En lugar de Pub/Sub, guardamos en la tabla SQL 'pending_requests'.
         """
-        message_bytes = json.dumps(data).encode("utf-8")
+        try:
+            # --- LÓGICA DE DESVÍO ---
+            logger.info(f"🛑 Desviando tarea a tabla SQL pendiente: {path}")
+            await save_pending_request(path)
+            return "saved_to_db"
 
-        future = self.publisher.publish(self.topic_path, message_bytes)
-        message_id = future.result()
+        except Exception as e:
+            logger.error(f"Error guardando pending request {path}: {e}")
+            # No lanzamos error para no detener el worker, pero el log queda registrado.
+            return None
 
-        logger.debug(f"Published message {message_id} to {self.topic_name}: {data}")
-        return message_id
-
-    def publish_folder_task(self, path: str) -> str:
+    async def publish_batch(self, paths: list[str]) -> list[str]:
         """
-        Convenience method to publish a folder crawl task.
-
-        Args:
-            path: Dropbox folder path to crawl
-
-        Returns:
-            Message ID from Pub/Sub
-        """
-        return self.publish_message({"path": path})
-
-    def publish_batch(self, paths: list[str]) -> list[str]:
-        """
-        Publish multiple folder tasks in batch.
-
-        Args:
-            paths: List of Dropbox folder paths
-
-        Returns:
-            List of message IDs
+        Ahora es ASYNC. Guarda múltiples rutas en la tabla SQL.
         """
         message_ids = []
         for path in paths:
-            msg_id = self.publish_folder_task(path)
-            message_ids.append(msg_id)
+            # AQUI ESTABA EL ERROR: Faltaba el await
+            msg_id = await self.publish_folder_task(path)
+            if msg_id:
+                message_ids.append(msg_id)
 
-        logger.info(f"Published {len(message_ids)} tasks to Pub/Sub")
+        logger.info(f"Guardadas {len(message_ids)} tareas en SQL (Desviadas)")
         return message_ids
-
 
 pubsub_mgr = PubSubManager()

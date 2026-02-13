@@ -1,9 +1,4 @@
-# Environment
-.env
-.env.local
-*.env
-
-# Python
+# --- Python ---
 __pycache__/
 *.py[cod]
 *$py.class
@@ -24,49 +19,32 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+MANIFEST
 
-# Virtual environments
+# --- Entornos Virtuales ---
 venv/
-ENV/
 env/
+ENV/
 .venv/
 
-# IDE
+# --- Variables de Entorno (¡SEGURIDAD!) ---
+.env
+.env.local
+.env.*
+
+# --- IDEs y Sistema Operativo ---
 .idea/
 .vscode/
-*.swp
-*.swo
-*~
-
-# Testing
-.coverage
-htmlcov/
-.tox/
-.pytest_cache/
-
-# Logs
-*.log
-logs/
-
-# OS
 .DS_Store
 Thumbs.db
 
-.env
-.env.*
-!.env.example
+# --- Base de Datos y Backups (¡CRÍTICO!) ---
+# Nunca subir dumps gigantes al repositorio de código
+*.sql
+*.dump
+*.sqlite
+backup_dropbox.sql
+entregable_IT.sql
 
-# Entorno Virtual de Python (Es gigante y específico de tu máquina)
-.venv/
-venv/
-
-# Archivos compilados de Python (Basura)
-__pycache__/
-*.pyc
-
-# IDEs (Configuraciones de tu editor de código)
-.vscode/
-.idea/
-
-# Sistema Operativo
-.DS_Store
+# --- Logs ---
+*.log

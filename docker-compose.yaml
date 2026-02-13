@@ -1,29 +1,45 @@
 version: '3.8'
 
 services:
-  # 1. Base de Datos (Configurada con TUS datos)
   db:
-    image: postgres:15
-    container_name: dropbox_postgres
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: pass
+      POSTGRES_DB: dropbox_index
     ports:
       - "5433:5432"
-    environment:
-      # Estos valores crean el usuario y la DB al iniciar el contenedor
-      POSTGRES_USER: dropbox_user      # <--- Debe coincidir con tu URL
-      POSTGRES_PASSWORD: ortega        # <--- Debe coincidir con tu URL
-      POSTGRES_DB: dropbox_index       # <--- Debe coincidir con tu URL
     volumes:
-      # Opcional pero recomendado: Esto guarda los datos en tu disco duro
-      # para no perderlos si apagas el contenedor.
       - postgres_data:/var/lib/postgresql/data
+      - ./entregable_IT.sql:/docker-entrypoint-initdb.d/init.sql
+    command: postgres -c 'max_connections=500' -c 'shared_buffers=1GB'
 
-  # 2. Emulador de Pub/Sub
-  pubsub:
-    image: gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators
-    container_name: dropbox_pubsub
-    command: gcloud beta emulators pubsub start --host-port=0.0.0.0:8085
+  redis:
+    image: redis:alpine
+    restart: always
     ports:
-      - "8085:8085"
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+
+  worker:
+    build: .
+    restart: always
+    depends_on:
+      - db
+      - redis
+    deploy:
+      mode: replicated
+      replicas: 2
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://user:pass@db:5432/dropbox_index
+      - REDIS_URL=redis://redis:6379/0
+      - MODE=WORKER
+      - API_SECRET_KEY=930xY0dJ0pD 
+    command: python -m app.main_local
 
 volumes:
   postgres_data:
+  redis_data:

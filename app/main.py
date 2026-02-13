@@ -7,7 +7,7 @@ from fastapi import FastAPI, Request, HTTPException
 from pydantic import BaseModel
 
 from app.config import get_settings
-from app.database import init_db
+from app.database import init_db 
 from app.services.crawler import process_folder_task
 
 # Configure logging
@@ -35,7 +35,8 @@ class PubSubMessage(BaseModel):
 async def startup_event():
     """Initialize database on startup."""
     logger.info("Initializing Dropbox Metadata Indexer")
-    init_db()
+    # CORRECCIÓN: Agregamos await porque init_db ahora es async
+    await init_db()
 
 
 @app.get("/health")
@@ -46,23 +47,15 @@ async def health_check():
 
 @app.post("/")
 async def handle_pubsub_push(request: Request):
-    """
-    Main endpoint: Receives Pub/Sub push messages from Eventarc.
-
-    The message contains a base64-encoded JSON with the folder path to process.
-    A successful 200 response automatically sends ACK to Pub/Sub.
-    """
     try:
         envelope = await request.json()
 
-        # Extract and decode the Pub/Sub message
         if "message" not in envelope:
             logger.warning("No message field in request")
             raise HTTPException(status_code=400, detail="No message in request")
 
         pubsub_message = envelope["message"]
 
-        # Decode base64 data
         if "data" not in pubsub_message:
             logger.warning("No data field in message")
             raise HTTPException(status_code=400, detail="No data in message")
@@ -70,14 +63,11 @@ async def handle_pubsub_push(request: Request):
         message_data = base64.b64decode(pubsub_message["data"]).decode("utf-8")
         payload = json.loads(message_data)
 
-        # Extract path from payload
         path = payload.get("path", "/")
         logger.info(f"Received task to process folder: {path}")
 
-        # Process the folder
         stats = await process_folder_task(path)
 
-        # Return 200 OK to ACK the message
         return {
             "status": "success",
             "processed": stats
@@ -89,18 +79,11 @@ async def handle_pubsub_push(request: Request):
 
     except Exception as e:
         logger.error(f"Error processing task: {e}", exc_info=True)
-        # Return 500 to trigger Pub/Sub retry
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/manual")
 async def manual_trigger(path: str = "/"):
-    """
-    Manual trigger endpoint for testing.
-
-    Args:
-        path: Dropbox folder path to process
-    """
     logger.info(f"Manual trigger for path: {path}")
     stats = await process_folder_task(path)
     return {"status": "success", "processed": stats}

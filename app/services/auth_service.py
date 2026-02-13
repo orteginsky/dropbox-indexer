@@ -1,15 +1,14 @@
+# app/services/auth_service.py
 import logging
 import asyncio
 from datetime import datetime, timedelta
 from typing import Optional
 
 import httpx
-
 from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
-
 
 class AuthService:
     """Client for AccessTokenDropbox microservice on Cloud Run."""
@@ -22,26 +21,30 @@ class AuthService:
         self._cached_token: Optional[str] = None
         self._token_expires_at: Optional[datetime] = None
 
-    async def get_valid_token(self) -> str:
+    async def get_valid_token(self, force_refresh: bool = False) -> str:
         """
-        Obtiene un token de acceso de Dropbox vía POST.
-        Utiliza caché local por 3.5 horas para evitar peticiones redundantes.
+        Obtiene un token de acceso.
+        Args:
+            force_refresh: Si es True, ignora el caché y pide uno nuevo.
         """
-        # 1. Verificar si tenemos un token en caché y si aún es válido
-        if self._cached_token and self._token_expires_at and datetime.utcnow() < self._token_expires_at:
-            logger.debug("Usando token de Dropbox desde el caché local")
-            return self._cached_token
+        # 1. Verificar caché (solo si no forzamos refresco)
+        if not force_refresh and self._cached_token and self._token_expires_at:
+            if datetime.utcnow() < self._token_expires_at:
+                # Token válido en memoria
+                return self._cached_token
+            else:
+                logger.info("Token en caché expirado. Solicitando nuevo...")
 
-        # 2. Configuración de la petición
-        headers = {
-            "Content-Type": "application/json"
-        }
-        # Usamos la clave de las variables de entorno para mayor seguridad
+        # 2. Pedir nuevo token al microservicio
+        return await self._fetch_new_token()
+
+    async def _fetch_new_token(self) -> str:
+        """Lógica interna para llamar al microservicio."""
+        headers = {"Content-Type": "application/json"}
         payload = {
             "signature": self.api_secret_key, 
             "service": "dropbox-index"
         }
-        
         endpoint = f"{self.token_service_url}/api/v1/token"
 
         async with httpx.AsyncClient(timeout=30.0) as client:
@@ -50,34 +53,38 @@ class AuthService:
             token = None
             last_error = None
 
-            # 3. Intentar hasta 3 veces (Reintentos asíncronos)
             for attempt in range(1, 4):
                 try:
-                    # ¡IMPORTANTE! El 'await' es necesario en FastAPI
                     response = await client.post(endpoint, json=payload, headers=headers)
                     response.raise_for_status()
                     
-                    token = response.json().get("access_token")
+                    data = response.json()
+                    token = data.get("access_token")
+                    
                     if token:
-                        break # ¡Éxito! Salimos del bucle de reintentos
-
+                        break 
                 except httpx.HTTPError as e:
                     last_error = e
                     logger.warning(f"Intento {attempt}/3 falló: {e}")
                     if attempt < 3:
-                        await asyncio.sleep(1) # Espera 1 seg sin bloquear el servidor
+                        await asyncio.sleep(1)
 
             if not token:
                 logger.critical("No se pudo obtener el token después de 3 intentos.")
-                raise ValueError(f"Falla al conectar con microservicio. Último error: {last_error}")
+                raise ValueError(f"Falla de Auth: {last_error}")
 
-            # 4. Guardamos en caché
+            # 3. Guardamos en caché (Reducido a 55 minutos para seguridad)
             self._cached_token = token
-            self._token_expires_at = datetime.utcnow() + timedelta(hours=3, minutes=30)
+            self._token_expires_at = datetime.utcnow() + timedelta(minutes=55)
             
-            logger.info("✅ Token de Dropbox obtenido y guardado en caché exitosamente")
+            logger.info("✅ Nuevo Token obtenido y guardado (expira en 55 min)")
             return token
 
+    def invalidate_cache(self):
+        """Borra el token actual para forzar una renovación en la siguiente llamada."""
+        logger.warning("Invalidando token en caché por error de autenticación.")
+        self._cached_token = None
+        self._token_expires_at = None
 
-# Instancia única (Singleton) para que el caché funcione en toda la app
+# Instancia global
 auth_service = AuthService()
