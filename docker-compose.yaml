@@ -41,5 +41,5 @@ services:
     command: python -m app.main_local
 
 volumes:
-  postgres_data:930xY0dJ0pD 
+  postgres_data:
   redis_data:
