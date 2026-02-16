@@ -32,7 +32,7 @@ services:
       - redis
     deploy:
       mode: replicated
-      replicas: 2
+      replicas: 20
     environment:
       - DATABASE_URL=postgresql+asyncpg://user:pass@db:5432/dropbox_index
       - REDIS_URL=redis://redis:6379/0
@@ -41,5 +41,5 @@ services:
     command: python -m app.main_local
 
 volumes:
-  postgres_data:
+  postgres_data:930xY0dJ0pD 
   redis_data:
