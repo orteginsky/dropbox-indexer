@@ -37,7 +37,7 @@ services:
       - DATABASE_URL=postgresql+asyncpg://user:pass@db:5432/dropbox_index
       - REDIS_URL=redis://redis:6379/0
       - MODE=WORKER
-      - API_SECRET_KEY=930xY0dJ0pD 
+      - API_SECRET_KEY=
     command: python -m app.main_local
 
 volumes:
