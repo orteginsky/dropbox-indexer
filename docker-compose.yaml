@@ -36,7 +36,7 @@ services:
     environment:
       - DATABASE_URL=postgresql+asyncpg://user:pass@db:5432/dropbox_index
       - REDIS_URL=redis://redis:6379/0
-      - MODE=WORKER
+      - MODE=PRODUCER
       - API_SECRET_KEY=930xY0dJ0pD
     command: python -m app.main_local
 
